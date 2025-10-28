@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Điểm Danh - Online Class Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .attendance-card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .status-present {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .status-absent {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .status-late {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+        .attendance-badge {
+            font-size: 0.8rem;
+            padding: 0.4em 0.6em;
+        }
+        .nav-tabs .nav-link.active {
+            font-weight: bold;
+            border-bottom: 3px solid #0d6efd;
+        }
+        .student-item {
+            transition: all 0.3s ease;
+            border-radius: 10px;
+        }
+        .student-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+        }
+        .history-item {
+            border-left: 4px solid #0d6efd;
+            transition: all 0.3s ease;
+        }
+        .history-item:hover {
+            border-left-color: #dc3545;
+            background-color: #f8f9fa;
+        }
+        .btn-status {
+            min-width: 80px;
+        }
+        .debug-panel {
+            background: #f8f9fa;
+            border-left: 4px solid #dc3545;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="fas fa-chalkboard-teacher me-2"></i>
+                Online Class Manager
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/dashboard"><i class="fas fa-tachometer-alt me-1"></i>Dashboard</a>
+                <a class="nav-link" href="/classes"><i class="fas fa-users me-1"></i>Lớp Học</a>
+                <a class="nav-link active" href="/attendance"><i class="fas fa-clipboard-check me-1"></i>Điểm Danh</a>
+                <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt me-1"></i>Đăng Xuất</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <h2><i class="fas fa-clipboard-check text-primary me-2"></i>Quản Lý Điểm Danh</h2>
+                <p class="text-muted">Quản lý điểm danh học sinh theo lớp và ngày học</p>
+            </div>
+        </div>
+
+        <!-- Debug Panel (có thể ẩn sau khi fix xong) -->
+        <div class="row mb-3">
+            <div class="col">
+                <div class="debug-panel">
+                    <strong>Debug Panel:</strong>
+                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="debugAttendanceAPI()">Test API</button>
+                    <button class="btn btn-sm btn-outline-secondary ms-1" onclick="clearDebug()">Clear Log</button>
+                    <span id="authStatus" class="badge bg-success ms-2">Đã đăng nhập</span>
+                    <div id="debugOutput" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Class Selection -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card attendance-card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-school me-2"></i>Chọn Lớp Học</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="classSelect" class="form-label">Lớp học:</label>
+                            <select id="classSelect" class="form-select">
+                                <option value="">-- Chọn lớp --</option>
+                            </select>
+                        </div>
+                        <div id="classInfo" class="d-none">
+                            <hr>
+                            <h6>Thông tin lớp:</h6>
+                            <p id="classDescription" class="mb-1"></p>
+                            <p id="classSchedule" class="mb-1 text-muted small"></p>
+                            <p id="classStudentsCount" class="mb-0 text-muted small"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card attendance-card stats-card">
+                    <div class="card-body text-center">
+                        <h3 id="currentDate" class="mb-2"></h3>
+                        <p class="mb-0">Hôm nay</p>
+                        <div id="todayStats" class="mt-3">
+                            <div class="row">
+                                <div class="col-4">
+                                    <h4 id="presentCount" class="mb-1">0</h4>
+                                    <small>Có mặt</small>
+                                </div>
+                                <div class="col-4">
+                                    <h4 id="absentCount" class="mb-1">0</h4>
+                                    <small>Vắng</small>
+                                </div>
+                                <div class="col-4">
+                                    <h4 id="lateCount" class="mb-1">0</h4>
+                                    <small>Muộn</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mb-4" id="attendanceTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="today-tab" data-bs-toggle="tab" data-bs-target="#today" type="button" role="tab">
+                    <i class="fas fa-calendar-day me-2"></i>Điểm Danh Hôm Nay
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
+                    <i class="fas fa-history me-2"></i>Lịch Sử Điểm Danh
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="report-tab" data-bs-toggle="tab" data-bs-target="#report" type="button" role="tab">
+                    <i class="fas fa-chart-bar me-2"></i>Báo Cáo Thống Kê
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="attendanceTabContent">
+            <!-- Today Tab -->
+            <div class="tab-pane fade show active" id="today" role="tabpanel">
+                <div class="card attendance-card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-users me-2"></i>Danh Sách Học Sinh</h5>
+                        <button id="saveAttendance" class="btn btn-success" disabled>
+                            <i class="fas fa-save me-2"></i>Lưu Điểm Danh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="todayAttendanceList" class="row">
+                            <div class="col-12 text-center">
+                                <p class="text-muted">Vui lòng chọn lớp học để xem danh sách điểm danh</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Tab -->
+            <div class="tab-pane fade" id="history" role="tabpanel">
+                <div class="card attendance-card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Lịch Sử Điểm Danh</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="attendanceHistory" class="row">
+                            <div class="col-12 text-center">
+                                <p class="text-muted">Vui lòng chọn lớp học để xem lịch sử điểm danh</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Report Tab -->
+            <div class="tab-pane fade" id="report" role="tabpanel">
+                <div class="card attendance-card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Báo Cáo Điểm Danh</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="attendanceReport" class="row">
+                            <div class="col-12 text-center">
+                                <p class="text-muted">Vui lòng chọn lớp học để xem báo cáo điểm danh</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-light bg-opacity-75 d-flex justify-content-center align-items-center" style="z-index: 9999;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let currentClassId = null;
+        let todayAttendance = [];
+        let attendanceHistory = [];
+        let attendanceReport = [];
+
+        // ==================== AUTH HELPER ====================
+
+        function getAuthHeaders() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                console.error('❌ No access token found');
+                updateAuthStatus('danger', 'Chưa đăng nhập');
+                // Redirect to login if no token
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 1000);
+                return {};
+            }
+            updateAuthStatus('success', 'Đã đăng nhập');
+            return {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        function updateAuthStatus(type, message) {
+            const authStatus = document.getElementById('authStatus');
+            authStatus.className = `badge bg-${type} ms-2`;
+            authStatus.textContent = message;
+        }
+
+        // ==================== INITIALIZATION ====================
+
+        // DOM Content Loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check authentication first
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                console.error('❌ No authentication token found');
+                updateAuthStatus('danger', 'Chưa đăng nhập');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 1500);
+                return;
+            }
+
+            // Verify token is valid by making a test API call
+            verifyToken();
+            
+            // Set current date
+            const now = new Date();
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('vi-VI', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            // Load classes
+            loadClasses();
+            
+            // Event listeners
+            document.getElementById('classSelect').addEventListener('change', function() {
+                currentClassId = this.value;
+                if (currentClassId) {
+                    loadClassInfo(currentClassId);
+                    loadTodayAttendance(currentClassId);
+                    loadAttendanceHistory(currentClassId);
+                    loadAttendanceReport(currentClassId);
+                    document.getElementById('saveAttendance').disabled = false;
+                } else {
+                    document.getElementById('classInfo').classList.add('d-none');
+                    document.getElementById('saveAttendance').disabled = true;
+                }
+            });
+
+            document.getElementById('saveAttendance').addEventListener('click', saveTodayAttendance);
+        });
+
+        // Verify token validity
+        async function verifyToken() {
+            try {
+                const response = await fetch('/api/user/profile', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('access_token');
+                    updateAuthStatus('danger', 'Token hết hạn');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    return false;
+                }
+                
+                if (!response.ok) {
+                    console.warn('⚠️ Token might be invalid');
+                    updateAuthStatus('warning', 'Token không hợp lệ');
+                } else {
+                    updateAuthStatus('success', 'Đã đăng nhập');
+                }
+                
+                return response.ok;
+            } catch (error) {
+                console.error('Error verifying token:', error);
+                updateAuthStatus('danger', 'Lỗi xác thực');
+                return false;
+            }
+        }
+
+        // ==================== API FUNCTIONS ====================
+
+        // Load classes for dropdown
+        async function loadClasses() {
+            showLoading();
+            try {
+                const response = await fetch('/api/classes', {
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401) {
+                    // Token expired or invalid
+                    localStorage.removeItem('access_token');
+                    updateAuthStatus('danger', 'Token hết hạn');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    return;
+                }
+
+                if (response.ok) {
+                    const classes = await response.json();
+                    const classSelect = document.getElementById('classSelect');
+                    
+                    // Clear existing options except the first one
+                    while (classSelect.children.length > 1) {
+                        classSelect.removeChild(classSelect.lastChild);
+                    }
+                    
+                    classes.forEach(classItem => {
+                        const option = document.createElement('option');
+                        option.value = classItem.id;
+                        option.textContent = `${classItem.class_name} - ${classItem.teacher_name}`;
+                        classSelect.appendChild(option);
+                    });
+                } else {
+                    throw new Error(`Failed to load classes: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error loading classes:', error);
+                showError('Lỗi khi tải danh sách lớp học');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Load class information
+        async function loadClassInfo(classId) {
+            try {
+                const response = await fetch(`/api/classes/${classId}`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('access_token');
+                    updateAuthStatus('danger', 'Token hết hạn');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    return;
+                }
+
+                if (response.ok) {
+                    const classInfo = await response.json();
+                    const classInfoDiv = document.getElementById('classInfo');
+                    
+                    document.getElementById('classDescription').textContent = classInfo.description || 'Không có mô tả';
+                    document.getElementById('classSchedule').textContent = `Lịch học: ${classInfo.schedule || 'Chưa có lịch'}`;
+                    document.getElementById('classStudentsCount').textContent = `Số học sinh: ${classInfo.students_count || 0}`;
+                    
+                    classInfoDiv.classList.remove('d-none');
+                }
+            } catch (error) {
+                console.error('Error loading class info:', error);
+            }
+        }
+
+        // Load today's attendance
+        async function loadTodayAttendance(classId) {
+            showLoading();
+            try {
+                const response = await fetch(`/api/classes/${classId}/attendance/today`, {
+                    headers: getAuthHeaders()
+                });
+
+                console.log("📊 Loading attendance for class:", classId);
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('access_token');
+                    updateAuthStatus('danger', 'Token hết hạn');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    return;
+                }
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log("✅ Attendance data received:", data);
+                    
+                    // FIX: Đảm bảo attendanceData là array
+                    todayAttendance = Array.isArray(data.attendance) ? data.attendance : [];
+                    console.log("🔄 Processed attendance:", todayAttendance);
+                    
+                    renderTodayAttendance(todayAttendance);
+                    updateStats(todayAttendance);
+                } else {
+                    const errorText = await response.text();
+                    console.error('❌ API Error:', errorText);
+                    throw new Error(`Failed to load attendance: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('❌ Error loading today attendance:', error);
+                showError('Không thể tải dữ liệu điểm danh. Vui lòng thử lại.');
+                
+                // Hiển thị thông báo lỗi
+                const container = document.getElementById('todayAttendanceList');
+                container.innerHTML = `
+                    <div class="col-12 text-center">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Không thể tải dữ liệu điểm danh: ${error.message}
+                        </div>
+                    </div>
+                `;
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Render today's attendance list
+        function renderTodayAttendance(attendance) {
+            const container = document.getElementById('todayAttendanceList');
+            
+            // FIX: Kiểm tra nếu attendance không phải array
+            if (!Array.isArray(attendance)) {
+                console.error('❌ Attendance data is not array:', attendance);
+                container.innerHTML = `
+                    <div class="col-12 text-center">
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            Dữ liệu điểm danh không hợp lệ
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (attendance.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Không có học sinh nào trong lớp này hoặc chưa có dữ liệu điểm danh
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            console.log("🎨 Rendering attendance for", attendance.length, "students");
+            
+            container.innerHTML = attendance.map((student, index) => `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card student-item h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">${student.student_name || 'Không có tên'}</h6>
+                            <p class="text-muted small mb-2">ID: ${student.student_id}</p>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn btn-status ${student.status === 'present' ? 'btn-success' : 'btn-outline-success'}" 
+                                    onclick="changeStatus(${index}, 'present')">
+                                    <i class="fas fa-check me-1"></i>Có mặt
+                                </button>
+                                <button type="button" class="btn btn-status ${student.status === 'late' ? 'btn-warning' : 'btn-outline-warning'}" 
+                                    onclick="changeStatus(${index}, 'late')">
+                                    <i class="fas fa-clock me-1"></i>Muộn
+                                </button>
+                                <button type="button" class="btn btn-status ${student.status === 'absent' ? 'btn-danger' : 'btn-outline-danger'}" 
+                                    onclick="changeStatus(${index}, 'absent')">
+                                    <i class="fas fa-times me-1"></i>Vắng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Change student status
+        function changeStatus(index, status) {
+            if (todayAttendance[index]) {
+                todayAttendance[index].status = status;
+                renderTodayAttendance(todayAttendance);
+                updateStats(todayAttendance);
+            }
+        }
+
+        // Update statistics
+        function updateStats(attendance) {
+            if (!Array.isArray(attendance)) {
+                console.error('❌ Cannot update stats: attendance is not array');
+                return;
+            }
+            
+            const presentCount = attendance.filter(s => s.status === 'present').length;
+            const absentCount = attendance.filter(s => s.status === 'absent').length;
+            const lateCount = attendance.filter(s => s.status === 'late').length;
+            
+            document.getElementById('presentCount').textContent = presentCount;
+            document.getElementById('absentCount').textContent = absentCount;
+            document.getElementById('lateCount').textContent = lateCount;
+        }
+
+        // Save today's attendance
+        async function saveTodayAttendance() {
+            if (!currentClassId) return;
+            
+            showLoading();
+            try {
+                const response = await fetch(`/api/classes/${currentClassId}/attendance/today`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        attendance: todayAttendance
+                    })
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('access_token');
+                    updateAuthStatus('danger', 'Token hết hạn');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    return;
+                }
+
+                if (response.ok) {
+                    showSuccess('Điểm danh đã được lưu thành công!');
+                    // Reload data
+                    loadTodayAttendance(currentClassId);
+                    loadAttendanceHistory(currentClassId);
+                    loadAttendanceReport(currentClassId);
+                } else {
+                    throw new Error('Failed to save attendance');
+                }
+            } catch (error) {
+                console.error('Error saving attendance:', error);
+                showError('Lỗi khi lưu điểm danh');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Load attendance history
+        async function loadAttendanceHistory(classId) {
+            try {
+                const response = await fetch(`/api/classes/${classId}/attendance/history`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('access_token');
+                    updateAuthStatus('danger', 'Token hết hạn');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    return;
+                }
+
+                if (response.ok) {
+                    const history = await response.json();
+                    attendanceHistory = Array.isArray(history) ? history : [];
+                    renderAttendanceHistory(attendanceHistory);
+                }
+            } catch (error) {
+                console.error('Error loading attendance history:', error);
+            }
+        }
+
+        // Render attendance history
+        function renderAttendanceHistory(history) {
+            const container = document.getElementById('attendanceHistory');
+            
+            if (!Array.isArray(history) || history.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center">
+                        <p class="text-muted">Chưa có lịch sử điểm danh</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = history.map(item => `
+                <div class="col-12 mb-3">
+                    <div class="card history-item">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-3">
+                                    <h6 class="mb-0">${new Date(item.date).toLocaleDateString('vi-VI')}</h6>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="row text-center">
+                                        <div class="col-4">
+                                            <span class="badge bg-success">${item.present_count || 0} có mặt</span>
+                                        </div>
+                                        <div class="col-4">
+                                            <span class="badge bg-warning">${item.late_count || 0} muộn</span>
+                                        </div>
+                                        <div class="col-4">
+                                            <span class="badge bg-danger">${item.absent_count || 0} vắng</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 text-end">
+                                    <span class="badge bg-primary">Tỷ lệ: ${item.attendance_rate || 0}%</span>
+                                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="viewDateDetail('${item.date}')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Load attendance report
+        async function loadAttendanceReport(classId) {
+            try {
+                const response = await fetch(`/api/classes/${classId}/attendance/report`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('access_token');
+                    updateAuthStatus('danger', 'Token hết hạn');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    return;
+                }
+
+                if (response.ok) {
+                    const report = await response.json();
+                    attendanceReport = Array.isArray(report) ? report : [];
+                    renderAttendanceReport(attendanceReport);
+                }
+            } catch (error) {
+                console.error('Error loading attendance report:', error);
+            }
+        }
+
+        // Render attendance report
+        function renderAttendanceReport(report) {
+            const container = document.getElementById('attendanceReport');
+            
+            if (!Array.isArray(report) || report.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center">
+                        <p class="text-muted">Chưa có dữ liệu báo cáo</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Học Sinh</th>
+                                <th>Có mặt</th>
+                                <th>Muộn</th>
+                                <th>Vắng</th>
+                                <th>Tổng</th>
+                                <th>Tỷ lệ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${report.map(student => `
+                                <tr>
+                                    <td>${student.student_name}</td>
+                                    <td><span class="badge bg-success">${student.present_count || 0}</span></td>
+                                    <td><span class="badge bg-warning">${student.late_count || 0}</span></td>
+                                    <td><span class="badge bg-danger">${student.absent_count || 0}</span></td>
+                                    <td><span class="badge bg-primary">${student.total_count || 0}</span></td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar ${getProgressBarClass(student.attendance_rate)}" 
+                                                 style="width: ${student.attendance_rate || 0}%">
+                                                ${student.attendance_rate || 0}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // ==================== DEBUG FUNCTIONS ====================
+
+        async function debugAttendanceAPI() {
+            const debugOutput = document.getElementById('debugOutput');
+            debugOutput.innerHTML = '<div class="text-info">🔄 Testing APIs...</div>';
+            
+            try {
+                const classId = document.getElementById('classSelect').value;
+                
+                if (!classId) {
+                    debugOutput.innerHTML += '<div class="text-danger">❌ No class selected</div>';
+                    return;
+                }
+
+                debugOutput.innerHTML += `<div class="text-info">🔍 Testing class ${classId}...</div>`;
+
+                // Test API cũ
+                try {
+                    const responseOld = await fetch(`/api/classes/${classId}/attendance?date=2025-10-28`, {
+                        headers: getAuthHeaders()
+                    });
+                    if (responseOld.ok) {
+                        const oldData = await responseOld.json();
+                        debugOutput.innerHTML += `<div class="text-success">✅ Old API: ${JSON.stringify(oldData).substring(0, 100)}...</div>`;
+                    } else {
+                        debugOutput.innerHTML += `<div class="text-danger">❌ Old API Error: ${responseOld.status}</div>`;
+                    }
+                } catch (e) {
+                    debugOutput.innerHTML += `<div class="text-danger">❌ Old API Error: ${e.message}</div>`;
+                }
+
+                // Test API mới
+                try {
+                    const responseNew = await fetch(`/api/classes/${classId}/attendance/today`, {
+                        headers: getAuthHeaders()
+                    });
+                    if (responseNew.ok) {
+                        const newData = await responseNew.json();
+                        debugOutput.innerHTML += `<div class="text-success">✅ New API: ${JSON.stringify(newData).substring(0, 100)}...</div>`;
+                    } else {
+                        debugOutput.innerHTML += `<div class="text-danger">❌ New API Error: ${responseNew.status}</div>`;
+                    }
+                } catch (e) {
+                    debugOutput.innerHTML += `<div class="text-danger">❌ New API Error: ${e.message}</div>`;
+                }
+                
+            } catch (error) {
+                debugOutput.innerHTML += `<div class="text-danger">❌ Debug error: ${error.message}</div>`;
+            }
+        }
+
+        function clearDebug() {
+            document.getElementById('debugOutput').innerHTML = '';
+        }
+
+        // ==================== UTILITY FUNCTIONS ====================
+
+        function getProgressBarClass(rate) {
+            if (rate >= 80) return 'bg-success';
+            if (rate >= 60) return 'bg-warning';
+            return 'bg-danger';
+        }
+
+        function showLoading() {
+            document.getElementById('loadingSpinner').classList.remove('d-none');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingSpinner').classList.add('d-none');
+        }
+
+        function showError(message) {
+            alert('❌ ' + message);
+        }
+
+        function showSuccess(message) {
+            alert('✅ ' + message);
+        }
+
+        function viewDateDetail(dateStr) {
+            alert('Xem chi tiết ngày: ' + dateStr);
+            // Implement later
+        }
+    </script>
+</body>
+</html>
